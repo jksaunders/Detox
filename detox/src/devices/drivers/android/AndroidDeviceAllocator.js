@@ -7,10 +7,18 @@ class AndroidDeviceAllocator {
   }
 
   async allocateDevice(deviceQuery) {
-    this.logger.debug({ event: ALLOCATE_DEVICE_LOG_EVT }, `Trying to allocate a device based on "${deviceQuery}"`);
+    this._preAllocate(deviceQuery);
     const deviceId = await this._doAllocateDevice(deviceQuery);
-    this.logger.debug({ event: ALLOCATE_DEVICE_LOG_EVT }, `Settled on ${deviceId}`);
+    this._postAllocate(deviceQuery, deviceId);
     return deviceId;
+  }
+
+  _preAllocate(deviceQuery) {
+    this.logger.debug({ event: ALLOCATE_DEVICE_LOG_EVT }, `Trying to allocate a device based on "${deviceQuery}"`);
+  }
+
+  _postAllocate(deviceQuery, deviceId) {
+    this.logger.debug({ event: ALLOCATE_DEVICE_LOG_EVT }, `Settled on ${deviceId}`);
   }
 
   async _doAllocateDevice(deviceQuery) {

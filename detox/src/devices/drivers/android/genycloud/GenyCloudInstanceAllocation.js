@@ -3,36 +3,45 @@ const GenyCloudInstanceHandle = require('./GenyCloudInstanceHandle');
 const retry = require('../../../../utils/retry');
 const logger = require('../../../../utils/logger').child({ __filename });
 
-class GenyCloudDeviceAllocator extends AndroidDeviceAllocator {
-  constructor(deviceRegistry, deviceCleanupRegistry, instanceLookupService, instanceLifecycleService) {
+class GenyCloudInstanceAllocation extends AndroidDeviceAllocator {
+  constructor(deviceRegistry, deviceCleanupRegistry, instanceLookupService, instanceLifecycleService, eventEmitter) {
     super(deviceRegistry, logger);
 
     this.deviceCleanupRegistry = deviceCleanupRegistry;
     this.instanceLookupService = instanceLookupService;
     this.instanceLifecycleService = instanceLifecycleService;
+    this.eventEmitter = eventEmitter;
   }
 
-  async _doAllocateDevice(recipe) {
+  async allocateDevice(recipe) {
     let { instance, isNew } = await this._doSynchronizedAllocation(recipe);
-    const instanceHandle = new GenyCloudInstanceHandle(instance);
 
     if (isNew) {
+      const instanceHandle = new GenyCloudInstanceHandle(instance);
       await this.deviceCleanupRegistry.allocateDevice(instanceHandle);
     }
 
     instance = await this._waitForInstanceBoot(instance);
     instance = await this._adbConnectIfNeeded(instance);
-    return {
-      instance,
-      isNew,
-      toString: () => instanceHandle.toString(),
-    }
+
+    await this._notifyAllocation(instance, recipe, isNew);
+    return instance;
+  }
+
+  async deallocateDevice(instance) {
+    const instanceHandle = new GenyCloudInstanceHandle(instance);
+
+    await this.eventEmitter.emit('beforeShutdownDevice', { deviceId: instance.adbName });
+    await this.instanceLifecycleService.deleteInstance(instance.uuid);
+    await this.deviceCleanupRegistry.disposeDevice(instanceHandle);
+    await this.eventEmitter.emit('shutdownDevice', { deviceId: instance.adbName });
   }
 
   async _doSynchronizedAllocation(recipe) {
     let instance = null;
     let isNew = false;
 
+    this._preAllocate(recipe);
     await this.deviceRegistry.allocateDevice(async () => {
       instance = await this.instanceLookupService.findFreeInstance();
       if (!instance) {
@@ -41,6 +50,7 @@ class GenyCloudDeviceAllocator extends AndroidDeviceAllocator {
       }
       return instance.uuid;
     });
+    this._postAllocate(recipe, instance);
 
     return {
       instance,
@@ -74,6 +84,10 @@ class GenyCloudDeviceAllocator extends AndroidDeviceAllocator {
     }
     return instance;
   }
+
+  async _notifyAllocation(instance, recipe, isNew) {
+    return this.eventEmitter.emit('bootDevice', { coldBoot: isNew, deviceId: instance.adbName, type: recipe.name });
+  }
 }
 
-module.exports = GenyCloudDeviceAllocator;
+module.exports = GenyCloudInstanceAllocation;

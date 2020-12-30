@@ -24,8 +24,7 @@ const EMU_BIN_STABLE_SKIN_VER = 28;
 class EmulatorDriver extends AndroidDriver {
   constructor(config) {
     super(config);
-
-    this._deviceRegistry = DeviceRegistry.forAndroid();
+    this._name = 'Unspecified Emulator';
 
     const emulatorExec = new EmulatorExec();
     this._emuVersionResolver = new EmulatorVersionResolver(emulatorExec);
@@ -34,10 +33,9 @@ class EmulatorDriver extends AndroidDriver {
     const avdsResolver = new AVDsResolver(emulatorExec);
     this._avdValidator = new AVDValidator(avdsResolver, this._emuVersionResolver);
 
+    this._deviceRegistry = DeviceRegistry.forAndroid();
     const freeEmulatorFinder = new FreeEmulatorFinder(this.adb, this._deviceRegistry)
     this._deviceAllocator = new EmulatorDeviceAllocator(this._deviceRegistry, freeEmulatorFinder);
-
-    this._name = 'Unspecified Emulator';
   }
 
   get name() {
